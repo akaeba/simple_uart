@@ -29,6 +29,8 @@
 #include <windows.h>
 #include <devguid.h>    // GUID_DEVCLASS_PORTS
 #include <Setupapi.h>   // Devices: SetupDiGetClassDevs
+#include <devpkey.h>    // Devices: SetupDiGetDevicePropertyW
+#include <stringapiset.h>   // WideCharToMultiByte, convert *W Function (Unicode) Output to ANSI
 #endif
 
 #ifdef __linux__
@@ -549,9 +551,12 @@ int simple_uart_describe(const char *uart, char *description, size_t max_desc_le
 
 // Windows Implementation
 #if defined(_WIN32)
-    int         intMatchUart = 0;   // device on machine matched
-    HDEVINFO    deviceInfoSet;
-    DWORD       i, r;
+    int             intMatchUart = 0;   // device on machine matched
+    HDEVINFO        deviceInfoSet;
+    DWORD           i, r;
+    SP_DEVINFO_DATA deviceInfoData;
+    DEVPROPTYPE     propertyType;
+    WCHAR           uniBuf[256];    // unicode encoded multibyte string
 
     /*  Get handle of device information
      *    @see https://learn.microsoft.com/en-us/windows/win32/api/setupapi/nf-setupapi-setupdigetclassdevsa
@@ -562,7 +567,6 @@ int simple_uart_describe(const char *uart, char *description, size_t max_desc_le
         return -1;
     }
     /* get device info */
-    SP_DEVINFO_DATA deviceInfoData;
     deviceInfoData.cbSize = sizeof(SP_DEVINFO_DATA);
     /*  iterate over DEVCLASS_PORTS elements
      *    @see https://learn.microsoft.com/en-us/windows/win32/api/setupapi/nf-setupapi-setupdigetdeviceregistrypropertya
@@ -584,8 +588,24 @@ int simple_uart_describe(const char *uart, char *description, size_t max_desc_le
         ++i;
     }
     /* no match by name */
-    if ( 0 == intMatchUart )
+    if ( 0 == intMatchUart ) {
         return 0;
+    }
+    /* Acquire 'bus reported device property'
+     *   f.e. 'USB-ISS.'
+     *
+     * @see https://learn.microsoft.com/en-us/windows/win32/api/setupapi/nf-setupapi-setupdigetdevicepropertyw
+     * @see https://github.com/tpn/winsdk-10/blob/master/Include/10.0.16299.0/shared/devpkey.h
+     * @see https://stackoverflow.com/questions/3438366/setupdigetdeviceproperty-usage-example
+     */
+    if ( SetupDiGetDevicePropertyW(deviceInfoSet, &deviceInfoData, &DEVPKEY_Device_BusReportedDeviceDesc, &propertyType, (PBYTE)uniBuf, sizeof(uniBuf), NULL, 0) ) {
+        if ( WideCharToMultiByte(CP_ACP, 0, uniBuf, -1, chrBuf, sizeof(chrBuf), NULL, NULL) ) { // converts unicode to ansi string
+            if ( '.' == chrBuf[strlen(chrBuf)-1] ) {    // drop last '.'
+                chrBuf[strlen(chrBuf)-1] = '\0';
+            }
+            snprintf(description+strlen(description), max_desc_len - strlen(description), "product='%s',", chrBuf);
+        }
+    }
     /*  acquire HW ID
      *    f.e. USB\VID_04D8&PID_FFEE&REV_0100
      */
