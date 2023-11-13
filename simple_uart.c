@@ -591,12 +591,23 @@ int simple_uart_describe(const char *uart, char *description, size_t max_desc_le
     if ( 0 == intMatchUart ) {
         return 0;
     }
-    /* Acquire 'bus reported device property'
-     *   f.e. 'USB-ISS.'
+    /* Acquire 'Manufacturer'
+     *   f.e. 'FTDI'
      *
      * @see https://learn.microsoft.com/en-us/windows/win32/api/setupapi/nf-setupapi-setupdigetdevicepropertyw
      * @see https://github.com/tpn/winsdk-10/blob/master/Include/10.0.16299.0/shared/devpkey.h
      * @see https://stackoverflow.com/questions/3438366/setupdigetdeviceproperty-usage-example
+     */
+    if ( SetupDiGetDevicePropertyW(deviceInfoSet, &deviceInfoData, &DEVPKEY_Device_Manufacturer, &propertyType, (PBYTE)uniBuf, sizeof(uniBuf), NULL, 0) ) {
+        if ( WideCharToMultiByte(CP_ACP, 0, uniBuf, -1, chrBuf, sizeof(chrBuf), NULL, NULL) ) { // converts unicode to ansi string
+            if ( '.' == chrBuf[strlen(chrBuf)-1] ) {    // drop last '.'
+                chrBuf[strlen(chrBuf)-1] = '\0';
+            }
+            snprintf(description+strlen(description), max_desc_len - strlen(description), "manufacturer='%s',", chrBuf);
+        }
+    }
+    /* Acquire 'bus reported device property'
+     *   f.e. 'USB-ISS.'
      */
     if ( SetupDiGetDevicePropertyW(deviceInfoSet, &deviceInfoData, &DEVPKEY_Device_BusReportedDeviceDesc, &propertyType, (PBYTE)uniBuf, sizeof(uniBuf), NULL, 0) ) {
         if ( WideCharToMultiByte(CP_ACP, 0, uniBuf, -1, chrBuf, sizeof(chrBuf), NULL, NULL) ) { // converts unicode to ansi string
