@@ -609,9 +609,6 @@ int simple_uart_describe(const char *uart, char *description, size_t max_desc_le
      */
     if ( SetupDiGetDevicePropertyW(deviceInfoSet, &deviceInfoData, &DEVPKEY_Device_BusReportedDeviceDesc, &propertyType, (PBYTE)uniBuf, sizeof(uniBuf), NULL, 0) ) {
         if ( WideCharToMultiByte(CP_ACP, 0, uniBuf, -1, chrBuf, sizeof(chrBuf), NULL, NULL) ) { // converts unicode to ansi string
-            if ( '.' == chrBuf[strlen(chrBuf)-1] ) {    // drop last '.'
-                chrBuf[strlen(chrBuf)-1] = '\0';
-            }
             snprintf(description+strlen(description), max_desc_len - strlen(description), "product='%s',", chrBuf);
         }
     }
