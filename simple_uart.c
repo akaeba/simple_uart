@@ -545,7 +545,8 @@ ssize_t simple_uart_list(char ***namesp)
 
 int simple_uart_describe(const char *uart, char *description, size_t max_desc_len)
 {
-    char    chrBuf[256];        // help buffer
+    char    chrBuf[256];    // help buffer
+    char    *ptrHelp;       // help pointer
 
     description[0] = '\0';  // empty string
 
@@ -600,9 +601,6 @@ int simple_uart_describe(const char *uart, char *description, size_t max_desc_le
      */
     if ( SetupDiGetDevicePropertyW(deviceInfoSet, &deviceInfoData, &DEVPKEY_Device_Manufacturer, &propertyType, (PBYTE)uniBuf, sizeof(uniBuf), NULL, 0) ) {
         if ( WideCharToMultiByte(CP_ACP, 0, uniBuf, -1, chrBuf, sizeof(chrBuf), NULL, NULL) ) { // converts unicode to ansi string
-            if ( '.' == chrBuf[strlen(chrBuf)-1] ) {    // drop last '.'
-                chrBuf[strlen(chrBuf)-1] = '\0';
-            }
             snprintf(description+strlen(description), max_desc_len - strlen(description), "manufacturer='%s',", chrBuf);
         }
     }
@@ -639,13 +637,21 @@ int simple_uart_describe(const char *uart, char *description, size_t max_desc_le
             snprintf(description+strlen(description), max_desc_len - strlen(description), "VID=%s,", chrId);
         }
     }
-    // Append next required property here
+    /*  acquire 'device instance path'
+     *    f.e. USB\VID_04D8&PID_FFEE\00060147
+     */
+    if ( SetupDiGetDevicePropertyW(deviceInfoSet, &deviceInfoData, &DEVPKEY_Device_InstanceId, &propertyType, (PBYTE)uniBuf, sizeof(uniBuf), NULL, 0) ) {
+        if ( WideCharToMultiByte(CP_ACP, 0, uniBuf, -1, chrBuf, sizeof(chrBuf), NULL, NULL) ) { // converts unicode to ansi string
+            ptrHelp = chrBuf;
+            while ( NULL != strstr(ptrHelp, "\\") && (ptrHelp = (strstr(ptrHelp, "\\") + 1)) ) {};  // go to last '/'
+            snprintf(description+strlen(description), max_desc_len - strlen(description), "serial=%s,", ptrHelp);
+        }
+    }
 // Linux Implementation
 #elif defined(__linux__)
     char    unresolvedPath[PATH_MAX];   // symbolic path to TTY device
     char    basePath[PATH_MAX];         // path to read out file
     char    pathUp[32];                 // number of hierarchy level ups
-    char    *ptrHelp;                   // help pointer
     int     intCnt = 0;                 // counts occurrence of device name
     /* assemble real path */
     strncpy(unresolvedPath, "/sys/class/tty/", sizeof(unresolvedPath));
